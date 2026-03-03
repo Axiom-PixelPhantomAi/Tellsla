@@ -29,6 +29,7 @@ workflows:
             -configuration Release \
             -derivedDataPath build \
             -archivePath "build/Tellsla.xcarchive" \
+            -allowProvisioningUpdates \
             archive
       
       - name: Export IPA for TestFlight
