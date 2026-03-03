@@ -252,6 +252,8 @@ struct AdminLoginSheet: View {
 struct TeslaLoginWebView: View {
     let onComplete: (Bool) -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var isLoading = false
+    @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -290,28 +292,125 @@ struct TeslaLoginWebView: View {
                         .foregroundStyle(.tertiary)
                 }
 
+                if let error = errorMessage {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .transition(.opacity)
+                }
+
                 Spacer()
 
                 Button {
-                    onComplete(true)
+                    startTeslaWebAuth()
                 } label: {
-                    Text("Connect Tesla Account")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
+                    HStack {
+                        if isLoading {
+                            ProgressView().tint(.white)
+                        }
+                        Text("Connect Tesla Account")
+                    }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
                 }
                 .buttonStyle(.borderedProminent)
                 .padding(.horizontal, 24)
                 .padding(.bottom)
+                .disabled(isLoading)
             }
             .navigationTitle("Connect Tesla")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .disabled(isLoading)
                 }
             }
         }
+    }
+
+    private func startTeslaWebAuth() {
+        isLoading = true
+        errorMessage = nil
+
+        Task {
+            guard let authURL = await AuthenticationService.shared.generateAuthURL() else {
+                await MainActor.run {
+                    isLoading = false
+                    errorMessage = "Failed to generate auth URL"
+                }
+                return
+            }
+
+            let scheme = "teslaroutinesconnect"
+            let session = ASWebAuthenticationSession(
+                url: authURL,
+                callbackURLScheme: scheme
+            ) { callbackURL, error in
+                Task {
+                    await handleAuthCallback(callbackURL: callbackURL, error: error)
+                }
+            }
+
+            session.presentationContextProvider = ASWebAuthenticationPresentationContextProviderImplementation()
+
+            if session.start() {
+                // Session started successfully
+            } else {
+                await MainActor.run {
+                    isLoading = false
+                    errorMessage = "Failed to start authentication session"
+                }
+            }
+        }
+    }
+
+    private func handleAuthCallback(callbackURL: URL?, error: Error?) async {
+        if let error = error {
+            await MainActor.run {
+                isLoading = false
+                errorMessage = "Authentication failed: \(error.localizedDescription)"
+            }
+            return
+        }
+
+        guard let callbackURL = callbackURL,
+              let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: true),
+              let code = components.queryItems?.first(where: { $0.name == "code" })?.value else {
+            await MainActor.run {
+                isLoading = false
+                errorMessage = "Invalid callback URL or missing auth code"
+            }
+            return
+        }
+
+        do {
+            let success = try await AuthenticationService.shared.exchangeCodeForToken(code: code)
+            await MainActor.run {
+                isLoading = false
+                if success {
+                    dismiss()
+                    onComplete(true)
+                } else {
+                    errorMessage = "Token exchange failed"
+                }
+            }
+        } catch {
+            await MainActor.run {
+                isLoading = false
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+}
+
+struct ASWebAuthenticationPresentationContextProviderImplementation: NSObject, ASWebAuthenticationPresentationContextProviding {
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        guard let window = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
+            return ASPresentationAnchor()
+        }
+        return window.windows.first ?? ASPresentationAnchor()
     }
 }
 
