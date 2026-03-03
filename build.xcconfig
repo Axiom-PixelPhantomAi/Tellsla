@@ -1,0 +1,15 @@
+// Build configuration for CodeMagic CI/CD
+// This file overrides project settings for automated builds
+
+// Code Signing - Manual style for CI/CD
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = Apple Distribution
+PROVISIONING_PROFILE_SPECIFIER = 
+PROVISIONING_PROFILE = 
+
+// Development Team
+DEVELOPMENT_TEAM = 894G4S5K4R
+
+// Suppress signing warnings
+CODE_SIGN_ALLOW_WILD_APPIDS = YES
+SWIFT_SUPPRESS_WARNINGS = NO
