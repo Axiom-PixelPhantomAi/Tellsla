@@ -1,17 +1,26 @@
 default_platform(:ios)
 
 platform :ios do
-  desc "Build and upload to TestFlight"
+  desc "Build and upload Tellsla to TestFlight"
   lane :testflight do
+    # Setup for CI
     setup_ci if is_ci
     
-    # Build the app
+    # Sync provisioning profiles and certificates using match
+    # match(
+    #   type: "appstore",
+    #   app_identifier: ["app.rork.tellsla", "app.rork.tellsla.TellslaWatch", "app.rork.tellsla.TellslaWidget"],
+    #   readonly: is_ci,
+    #   git_basic_authorization: ENV["MATCH_GIT_AUTH"]
+    # )
+    
+    # Build and upload
     build_app(
       project: "Tellsla.xcodeproj",
       scheme: "Tellsla",
       configuration: "Release",
-      derived_data_path: "build",
       destination: "generic/platform=iOS",
+      derived_data_path: "build",
       archive_path: "build/Tellsla.xcarchive",
       export_method: "app-store",
       export_options: {
@@ -22,11 +31,9 @@ platform :ios do
         thinning: "<none>"
       },
       skip_package_ipa: false,
-      skip_package_pkg: true,
       output_directory: "build/ipa",
       output_name: "Tellsla.ipa",
-      skip_app_version_update: true,
-      skip_package_dependencies_resolution: false
+      skip_app_version_update: true
     )
     
     # Upload to TestFlight
@@ -34,15 +41,9 @@ platform :ios do
       ipa: "build/ipa/Tellsla.ipa",
       skip_submission: true,
       skip_waiting_for_build_processing: true,
-      api_key_path: "fastlane/app_store_connect_api_key.json"
+      api_key_path: "fastlane/app_store_connect_key.json"
     )
     
-    puts("✅ Build uploaded to TestFlight successfully!")
-  end
-
-  desc "Match provisioning profiles (requires match credentials)"
-  lane :match_profiles do
-    # This would sync profiles from git repo - optional for now
-    # match(type: "appstore", readonly: true)
+    puts("✅ Successfully uploaded to TestFlight!")
   end
 end

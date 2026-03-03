@@ -12,53 +12,45 @@ workflows:
         APP_STORE_CONNECT_ISSUER_ID: 23c1e19b-ffc3-4fe0-a48d-395c84ca3c0b
         APP_STORE_CONNECT_KEY_IDENTIFIER: WBU777B3N3
         APP_STORE_CONNECT_PRIVATE_KEY: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JR1RBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcVdTTTQ5QXdFSEJIa3dkd0lCQVFRZ05qaUNkY2lpYmE1dkdPZWMKbEZOVE1rRE1WZTZtZHdNckNBeXBCSjJUQ3Z1Z0NnWUlLb1pJemowREFRZWhSQU5DQUFUYmJrcFI5OXNNTmVQawpBWWc5cnh1cFpGeVZMTlFZRmdWQWFWL1V1aksxdlBXcWQxQ3EvMkZJcHVmV0U5WHBrM2dVb3oxTVY1WnE5c3RpCnh3SkxPeTI0Ci0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0=
-        XCODE_PROJECT: Tellsla.xcodeproj
-        XCODE_SCHEME: Tellsla
-        BUNDLE_ID: app.rork.tellsla
         DEVELOPMENT_TEAM: 894G4S5K4R
     scripts:
-      - name: Setup App Store Connect API Key
+      - name: Install Fastlane
         script: |
-          set -e
-          mkdir -p ~/.appstoreconnect/private_keys
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" | base64 -d > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
-          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
-          echo "✅ API key ready"
+          sudo gem install -N fastlane
+          fastlane --version
+          echo "✅ Fastlane installed"
       
-      - name: Build Archive
+      - name: Generate App Store Connect API Key
         script: |
           set -e
-          xcodebuild \
-            -project "$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Release \
-            -derivedDataPath build \
-            -archivePath "build/Tellsla.xcarchive" \
-            -destination generic/platform=iOS \
-            -allowProvisioningUpdates
-          echo "✅ Archive done"
+          python3 << 'EOF'
+          import json, base64, os
+          
+          issuer = os.environ.get("APP_STORE_CONNECT_ISSUER_ID")
+          key_id = os.environ.get("APP_STORE_CONNECT_KEY_IDENTIFIER")
+          key_b64 = os.environ.get("APP_STORE_CONNECT_PRIVATE_KEY")
+          
+          key_data = base64.b64decode(key_b64).decode('utf-8')
+          
+          api_key = {
+            "key_id": key_id,
+            "issuer_id": issuer,
+            "key": key_data,
+            "in_house": False
+          }
+          
+          os.makedirs("fastlane", exist_ok=True)
+          with open("fastlane/app_store_connect_key.json", "w") as f:
+            json.dump(api_key, f, indent=2)
+          
+          os.chmod("fastlane/app_store_connect_key.json", 0o600)
+          print("✅ API key generated")
+          EOF
       
-      - name: Export IPA
+      - name: Build & Upload with Fastlane
         script: |
-          set -e
-          xcodebuild -exportArchive \
-            -archivePath "build/Tellsla.xcarchive" \
-            -exportOptionsPlist "ExportOptions.plist" \
-            -exportPath "build/ipa" \
-            -allowProvisioningUpdates
-          ls -lh build/ipa/Tellsla.ipa
-          echo "✅ IPA exported"
-      
-      - name: Upload to TestFlight
-        script: |
-          set -e
-          xcrun altool --upload-app \
-            --type ios \
-            --file "build/ipa/Tellsla.ipa" \
-            --apiKey "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
-            --show-progress
-          echo "✅ TestFlight upload complete"
+          cd fastlane
+          fastlane testflight
     
     artifacts:
       - build/ipa/Tellsla.ipa
