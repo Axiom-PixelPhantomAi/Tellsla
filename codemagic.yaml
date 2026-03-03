@@ -7,9 +7,8 @@ workflows:
       events:
         - push
       branch:
-        patterns:
-          - pattern: main
-            include: true
+        include:
+          - main
     environment:
       xcode: latest
       vars:
