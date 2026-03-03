@@ -23,8 +23,7 @@ workflows:
             -configuration Release \
             -derivedDataPath build \
             -archivePath "build/Tellsla.xcarchive" \
-            -allowProvisioningUpdates \
-            archive
+            archive CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
       
       - name: Export IPA
         script: |
@@ -32,8 +31,7 @@ workflows:
           xcodebuild -exportArchive \
             -archivePath "build/Tellsla.xcarchive" \
             -exportOptionsPlist "ExportOptions.plist" \
-            -exportPath build/ipa \
-            -allowProvisioningUpdates
+            -exportPath build/ipa
       
       - name: Upload to TestFlight
         script: |
