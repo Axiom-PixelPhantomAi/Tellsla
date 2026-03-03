@@ -78,6 +78,28 @@ actor TeslaAPIService {
         try await sendCommand(vehicleId: vehicleId, command: "auto_conditioning_stop")
     }
 
+    func fetchNearbySuperchargers(latitude: Double, longitude: Double, radiusMiles: Double = 50) async throws -> [Supercharger] {
+        // Mock implementation - In production, query Tesla Fleet API or third-party DB
+        return mockSuperchargers(near: CLLocationCoordinate2D(latitude: latitude, longitude: longitude), radius: radiusMiles)
+    }
+
+    private func mockSuperchargers(near center: CLLocationCoordinate2D, radius: Double) -> [Supercharger] {
+        let mockChargers = [
+            Supercharger(id: "sc_001", name: "Golden Gate Park", address: "San Francisco, CA", latitude: 37.7694, longitude: -122.4862, totalStalls: 12, availableStalls: 7, maxPowerKW: 250, pricePerKWh: 0.35, amenities: [.restrooms, .food], status: .operational, distanceMiles: 3.2, estimatedWaitMinutes: 12),
+            Supercharger(id: "sc_002", name: "Walnut Creek", address: "Walnut Creek, CA", latitude: 37.8687, longitude: -122.3005, totalStalls: 20, availableStalls: 15, maxPowerKW: 250, pricePerKWh: 0.32, amenities: [.restrooms, .wifi, .shopping], status: .operational, distanceMiles: 15.4, estimatedWaitMinutes: 5),
+            Supercharger(id: "sc_003", name: "San Jose Airport", address: "San Jose, CA", latitude: 37.6213, longitude: -122.0750, totalStalls: 30, availableStalls: 8, maxPowerKW: 250, pricePerKWh: 0.38, amenities: [.restrooms, .lodging, .wifi], status: .congested, distanceMiles: 42.1, estimatedWaitMinutes: 28)
+        ]
+        return mockChargers.filter { sc in haversineDistance(from: center, to: sc.coordinate) <= radius }
+    }
+
+    private func haversineDistance(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) -> Double {
+        let latDiff = (to.latitude - from.latitude) * .pi / 180
+        let lonDiff = (to.longitude - from.longitude) * .pi / 180
+        let a = sin(latDiff / 2) * sin(latDiff / 2) + cos(from.latitude * .pi / 180) * cos(to.latitude * .pi / 180) * sin(lonDiff / 2) * sin(lonDiff / 2)
+        let c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return 3959 * c
+    }
+
     func lockDoors(vehicleId: String) async throws {
         try await sendCommand(vehicleId: vehicleId, command: "door_lock")
     }
