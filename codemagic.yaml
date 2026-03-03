@@ -15,15 +15,28 @@ workflows:
         XCODE_SCHEME: Tellsla
         BUNDLE_ID: app.rork.tellsla
     scripts:
+      - name: Resolve Swift Package Dependencies
+        script: |
+          set -e
+          xcodebuild -resolvePackageDependencies \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release
+      
       - name: Build Archive
         script: |
           set -e
           xcodebuild -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
+            -sdk iphoneos \
             -derivedDataPath build \
             -archivePath "build/Tellsla.xcarchive" \
-            archive CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+            -allowProvisioningUpdates \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
       
       - name: Export IPA
         script: |
