@@ -1,0 +1,15 @@
+// Release build configuration for CI/CD
+// Force manual signing and set credentials
+
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = Apple Distribution
+PROVISIONING_PROFILE_SPECIFIER = 
+PROVISIONING_PROFILE = 
+DEVELOPMENT_TEAM = 894G4S5K4R
+
+// Disable provisioning profile requirement checks
+CODE_SIGN_ALLOW_WILD_APPIDS = YES
+ALLOW_PROVISIONING_PROFILE_SELECTION = YES
+
+// Don't require signing during archive
+OTHER_CODE_SIGN_FLAGS = --deep

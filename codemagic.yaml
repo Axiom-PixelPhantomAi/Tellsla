@@ -17,60 +17,83 @@ workflows:
         BUNDLE_ID: app.rork.tellsla
         DEVELOPMENT_TEAM: 894G4S5K4R
     scripts:
-      - name: Setup App Store Connect Credentials
-        script: |
-          set -e
-          mkdir -p ~/.appstoreconnect/private_keys
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" | base64 -d > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
-          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
-          echo "✅ App Store Connect API key configured"
-      
-      - name: Build Archive (No Signing)
+      - name: Setup Credentials
         script: |
           set -e
           
-          # Archive WITHOUT code signing - just compile
-          xcodebuild \
+          # Setup App Store Connect API key
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" | base64 -d > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
+          
+          # Setup fake keychain to bypass account requirement
+          security create-keychain -p "" /tmp/build.keychain || true
+          security default-keychain -s /tmp/build.keychain
+          security unlock-keychain -p "" /tmp/build.keychain
+          
+          echo "✅ Credentials configured"
+      
+      - name: Build
+        script: |
+          set -e
+          
+          # Build without code signing entirely
+          xcodebuild build \
             -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
             -destination generic/platform=iOS \
             -derivedDataPath build \
-            -archivePath "build/Tellsla.xcarchive" \
-            -skipPackagePluginValidation \
+            -xcconfig Release.xcconfig \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            archive
+            PROVISIONING_PROFILE="" \
+            PROVISIONING_PROFILE_SPECIFIER=""
           
-          echo "✅ Unsigned archive created"
+          echo "✅ Build completed"
       
-      - name: Export IPA (with Auto Signing)
+      - name: Archive (without signing)
         script: |
           set -e
           
-          # Export with -allowProvisioningUpdates to auto-create profiles
-          # This step does the actual code signing via App Store Connect
+          xcodebuild -archive \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            -archivePath "build/Tellsla.xcarchive" \
+            -derivedDataPath build \
+            -xcconfig Release.xcconfig \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            PROVISIONING_PROFILE="" \
+            PROVISIONING_PROFILE_SPECIFIER=""
+          
+          echo "✅ Archive created (unsigned)"
+          ls -lh build/Tellsla.xcarchive
+      
+      - name: Export & Sign IPA
+        script: |
+          set -e
+          
+          # Now sign during export with proper xcodebuild export
           xcodebuild -exportArchive \
             -archivePath "build/Tellsla.xcarchive" \
             -exportOptionsPlist "ExportOptions.plist" \
             -exportPath "build/ipa" \
             -allowProvisioningUpdates \
-            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+            CODE_SIGNING_ALLOWED=YES
           
-          echo "✅ IPA exported with code signing"
+          echo "✅ IPA exported and signed"
           ls -lh build/ipa/Tellsla.ipa
       
       - name: Upload to TestFlight
         script: |
           set -e
           
-          if [ ! -f "build/ipa/Tellsla.ipa" ]; then
-            echo "❌ IPA file not found at build/ipa/Tellsla.ipa"
-            exit 1
-          fi
-          
-          echo "📤 Uploading to TestFlight..."
           xcrun altool --upload-app \
             --type ios \
             --file "build/ipa/Tellsla.ipa" \
@@ -78,7 +101,7 @@ workflows:
             --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
             --show-progress
           
-          echo "✅ TestFlight upload complete"
+          echo "✅ Upload complete - check TestFlight in App Store Connect"
     
     artifacts:
       - build/ipa/Tellsla.ipa
