@@ -11,10 +11,15 @@ workflows:
       vars:
         APP_STORE_CONNECT_ISSUER_ID: 23c1e19b-ffc3-4fe0-a48d-395c84ca3c0b
         APP_STORE_CONNECT_KEY_IDENTIFIER: WBU777B3N3
+        APP_STORE_CONNECT_PRIVATE_KEY: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JR1RBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcVdTTTQ5QXdFSEJIa3dkd0lCQVFRZ05qaUNkY2lpYmE1dkdPZWMKbEZOVE1rRE1WZTZtZHdNckNBeXBCSjJUQ3Z1Z0NnWUlLb1pJemowREFRZWhSQU5DQUFUYmJrcFI5OXNNTmVQawpBWWc5cnh1cFpGeVZMTlFZRmdWQWFWL1V1aksxdlBXcWQxQ3EvMkZJcHVmV0U5WHBrM2dVb3oxTVY1WnE5c3RpCnh3SkxPeTI0Ci0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0=
         XCODE_PROJECT: Tellsla.xcodeproj
         XCODE_SCHEME: Tellsla
         BUNDLE_ID: app.rork.tellsla
     scripts:
+      - name: Decode Private Key
+        script: |
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" | base64 -d > /tmp/AuthKey.p8
+      
       - name: Build & Archive
         script: |
           set -e
@@ -24,7 +29,6 @@ workflows:
             -configuration Release \
             -derivedDataPath build \
             -archivePath "build/Tellsla.xcarchive" \
-            -allowProvisioningUpdates \
             archive
       
       - name: Export IPA for TestFlight
