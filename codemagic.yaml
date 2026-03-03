@@ -15,12 +15,16 @@ workflows:
         XCODE_SCHEME: Tellsla
         BUNDLE_ID: app.rork.tellsla
     scripts:
-      - name: Install CocoaPods
+      - name: Install Dependencies
         script: |
-          pod install
+          set -e
+          if [ -f "Podfile" ]; then
+            pod install --repo-update
+          fi
       
-      - name: Archive App
+      - name: Build Archive
         script: |
+          set -e
           xcodebuild -workspace "$XCODE_WORKSPACE" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
@@ -31,6 +35,7 @@ workflows:
       
       - name: Export IPA
         script: |
+          set -e
           xcodebuild -exportArchive \
             -archivePath "build/Tellsla.xcarchive" \
             -exportOptionsPlist "ExportOptions.plist" \
@@ -39,8 +44,14 @@ workflows:
       
       - name: Upload to TestFlight
         script: |
+          set -e
+          IPA_PATH="build/ipa/Tellsla.ipa"
+          if [ ! -f "$IPA_PATH" ]; then
+            echo "❌ IPA not found at $IPA_PATH"
+            exit 1
+          fi
           xcrun altool --upload-app \
-            --file "build/ipa/Tellsla.ipa" \
+            --file "$IPA_PATH" \
             --type ios \
             --apiKey "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
