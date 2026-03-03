@@ -22,41 +22,80 @@ workflows:
           chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
           echo "✅ API key ready"
       
-      - name: Archive
+      - name: Build for Archive (No Code Signing)
         script: |
           set -e
-          xcodebuild \
+          
+          # Force disable code signing - we'll sign at export step
+          xcodebuild build-for-testing \
+            -project Tellsla.xcodeproj \
+            -scheme Tellsla \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            -derivedDataPath build \
+            -skipPackagePluginValidation \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            PROVISIONING_PROFILE="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            OTHER_CODE_SIGN_FLAGS="" \
+            2>&1 | tail -50
+          
+          echo "✅ Build completed without signing"
+      
+      - name: Create Archive (No Code Signing)
+        script: |
+          set -e
+          
+          xcodebuild archive \
             -project Tellsla.xcodeproj \
             -scheme Tellsla \
             -configuration Release \
             -destination generic/platform=iOS \
             -derivedDataPath build \
             -archivePath build/Tellsla.xcarchive \
-            -allowProvisioningUpdates \
-            archive
-          echo "✅ Archive created"
+            -skipPackagePluginValidation \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            PROVISIONING_PROFILE="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            OTHER_CODE_SIGN_FLAGS="" \
+            2>&1 | tail -50
+          
+          echo "✅ Archive created (unsigned)"
+          ls -lh build/Tellsla.xcarchive
       
-      - name: Export IPA
+      - name: Export & Sign IPA
         script: |
           set -e
+          
+          # NOW enable signing at export time with -allowProvisioningUpdates
           xcodebuild -exportArchive \
             -archivePath build/Tellsla.xcarchive \
             -exportOptionsPlist ExportOptions.plist \
             -exportPath build/ipa \
-            -allowProvisioningUpdates
+            -allowProvisioningUpdates \
+            CODE_SIGNING_ALLOWED=YES \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+            2>&1 | tail -50
+          
+          echo "✅ IPA exported and signed"
           ls -lh build/ipa/Tellsla.ipa
-          echo "✅ IPA exported"
       
       - name: Upload to TestFlight
         script: |
           set -e
+          
           xcrun altool --upload-app \
             --type ios \
             --file build/ipa/Tellsla.ipa \
             --apiKey "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
             --show-progress
-          echo "✅ TestFlight upload complete"
+          
+          echo "✅ TestFlight upload successful"
     
     artifacts:
       - build/ipa/Tellsla.ipa
