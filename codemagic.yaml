@@ -8,9 +8,6 @@ workflows:
         - push
     environment:
       xcode: latest
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: app.rork.tellsla
       vars:
         APP_STORE_CONNECT_ISSUER_ID: 23c1e19b-ffc3-4fe0-a48d-395c84ca3c0b
         APP_STORE_CONNECT_KEY_IDENTIFIER: WBU777B3N3
@@ -20,7 +17,7 @@ workflows:
         BUNDLE_ID: app.rork.tellsla
         DEVELOPMENT_TEAM: 894G4S5K4R
     scripts:
-      - name: Decode & Setup App Store Connect API Key
+      - name: Setup App Store Connect Credentials
         script: |
           set -e
           mkdir -p ~/.appstoreconnect/private_keys
@@ -28,49 +25,60 @@ workflows:
           chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
           echo "✅ App Store Connect API key configured"
       
-      - name: Build & Archive for TestFlight
+      - name: Build Archive (No Signing)
         script: |
           set -e
           
+          # Archive WITHOUT code signing - just compile
           xcodebuild \
             -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
+            -destination generic/platform=iOS \
             -derivedDataPath build \
             -archivePath "build/Tellsla.xcarchive" \
-            -allowProvisioningUpdates \
+            -skipPackagePluginValidation \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
             archive
           
-          echo "✅ Archive created"
-          ls -lh build/Tellsla.xcarchive
+          echo "✅ Unsigned archive created"
       
-      - name: Export IPA for TestFlight
+      - name: Export IPA (with Auto Signing)
         script: |
           set -e
           
+          # Export with -allowProvisioningUpdates to auto-create profiles
+          # This step does the actual code signing via App Store Connect
           xcodebuild -exportArchive \
             -archivePath "build/Tellsla.xcarchive" \
             -exportOptionsPlist "ExportOptions.plist" \
-            -exportPath build/ipa \
-            -allowProvisioningUpdates
+            -exportPath "build/ipa" \
+            -allowProvisioningUpdates \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"
           
-          echo "✅ IPA exported"
+          echo "✅ IPA exported with code signing"
           ls -lh build/ipa/Tellsla.ipa
       
-      - name: Upload to TestFlight via App Store Connect API
+      - name: Upload to TestFlight
         script: |
           set -e
           
-          # Use xcrun with API key for upload
-          xcrun altool \
-            --upload-app \
+          if [ ! -f "build/ipa/Tellsla.ipa" ]; then
+            echo "❌ IPA file not found at build/ipa/Tellsla.ipa"
+            exit 1
+          fi
+          
+          echo "📤 Uploading to TestFlight..."
+          xcrun altool --upload-app \
             --type ios \
             --file "build/ipa/Tellsla.ipa" \
             --apiKey "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
             --show-progress
           
-          echo "✅ Upload to TestFlight complete"
+          echo "✅ TestFlight upload complete"
     
     artifacts:
       - build/ipa/Tellsla.ipa
