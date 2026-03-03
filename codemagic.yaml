@@ -1,0 +1,75 @@
+definitions:
+  environment:
+    groups:
+      - appstore_credentials
+        variables:
+          APP_STORE_CONNECT_ISSUER_ID: 23c1e19b-ffc3-4fe0-a48d-395c84ca3c0b
+          APP_STORE_CONNECT_KEY_IDENTIFIER: WBU777B3N3
+          APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
+          XCODE_WORKSPACE: "Tellsla.xcworkspace"
+          XCODE_SCHEME: "Tellsla"
+          BUNDLE_ID: "app.rork.tellsla"
+          APP_VERSION: "1.1.0"
+
+workflows:
+  ios-testflight:
+    name: iOS TestFlight Build & Upload
+    max_build_duration: 120
+    instance_type: mac_mini_m1
+    environment:
+      groups:
+        - appstore_credentials
+      xcode: latest
+    triggering:
+      events:
+        - push
+      branch:
+        patterns:
+          - pattern: main
+            include: true
+    scripts:
+      - name: Set Build Version
+        script: |
+          agvtool new-marketing-version 1.1.0
+          agvtool new-build-number $CI_BUILD_NUMBER
+      
+      - name: Install CocoaPods
+        script: |
+          pod install
+      
+      - name: Archive App
+        script: |
+          xcodebuild -workspace "Tellsla.xcworkspace" \
+            -scheme "Tellsla" \
+            -configuration Release \
+            -derivedDataPath build \
+            -archivePath "build/Tellsla.xcarchive" \
+            -allowProvisioningUpdates \
+            archive
+      
+      - name: Export IPA
+        script: |
+          xcodebuild -exportArchive \
+            -archivePath "build/Tellsla.xcarchive" \
+            -exportOptionsPlist "ExportOptions.plist" \
+            -exportPath build/ipa \
+            -allowProvisioningUpdates
+      
+      - name: Upload to TestFlight
+        script: |
+          xcrun altool --upload-app \
+            --file "build/ipa/Tellsla.ipa" \
+            --type ios \
+            --apiKey "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+
+artifacts:
+  - build/ipa/Tellsla.ipa
+
+publishing:
+  email:
+    recipients:
+      - axiomops@proton.me
+    notify:
+      success: true
+      failure: true
