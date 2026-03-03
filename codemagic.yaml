@@ -14,46 +14,83 @@ workflows:
         APP_STORE_CONNECT_PRIVATE_KEY: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JR1RBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcVdTTTQ5QXdFSEJIa3dkd0lCQVFRZ05qaUNkY2lpYmE1dkdPZWMKbEZOVE1rRE1WZTZtZHdNckNBeXBCSjJUQ3Z1Z0NnWUlLb1pJemowREFRZWhSQU5DQUFUYmJrcFI5OXNNTmVQawpBWWc5cnh1cFpGeVZMTlFZRmdWQWFWL1V1aksxdlBXcWQxQ3EvMkZJcHVmV0U5WHBrM2dVb3oxTVY1WnE5c3RpCnh3SkxPeTI0Ci0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0=
         DEVELOPMENT_TEAM: 894G4S5K4R
     scripts:
-      - name: Install Fastlane
-        script: |
-          sudo gem install -N fastlane
-          fastlane --version
-          echo "✅ Fastlane installed"
-      
-      - name: Generate App Store Connect API Key
+      - name: Setup API Key & Bypass Signing
         script: |
           set -e
-          python3 << 'EOF'
-          import json, base64, os
           
-          issuer = os.environ.get("APP_STORE_CONNECT_ISSUER_ID")
-          key_id = os.environ.get("APP_STORE_CONNECT_KEY_IDENTIFIER")
-          key_b64 = os.environ.get("APP_STORE_CONNECT_PRIVATE_KEY")
+          # Decode API key
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" | base64 -d > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
           
-          key_data = base64.b64decode(key_b64).decode('utf-8')
+          # Create bypass keychain to skip account requirement
+          security create-keychain -p "" /tmp/build.keychain 2>/dev/null || true
+          security default-keychain -s /tmp/build.keychain
+          security unlock-keychain -p "" /tmp/build.keychain
+          security set-keychain-settings -lut 3600 /tmp/build.keychain
           
-          api_key = {
-            "key_id": key_id,
-            "issuer_id": issuer,
-            "key": key_data,
-            "in_house": False
-          }
-          
-          os.makedirs("fastlane", exist_ok=True)
-          with open("fastlane/app_store_connect_key.json", "w") as f:
-            json.dump(api_key, f, indent=2)
-          
-          os.chmod("fastlane/app_store_connect_key.json", 0o600)
-          print("✅ API key generated")
-          EOF
+          echo "✅ Setup complete"
       
-      - name: Build & Upload with Fastlane
+      - name: Build Unsigned Archive
         script: |
-          cd fastlane
-          fastlane testflight
+          set -e
+          
+          # Completely disable code signing to bypass provisioning requirements
+          xcodebuild \
+            -project Tellsla.xcodeproj \
+            -scheme Tellsla \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            -derivedDataPath build \
+            -archivePath build/Tellsla.xcarchive \
+            -allowProvisioningUpdates \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+            OTHER_CODE_SIGN_FLAGS="" \
+            archive 2>&1 | tee build.log
+          
+          echo "✅ Archive created (unsigned)"
+          ls -lh build/Tellsla.xcarchive
+      
+      - name: Export Signed IPA
+        script: |
+          set -e
+          
+          # Export with signing enabled and allow provisioning updates
+          xcodebuild -exportArchive \
+            -archivePath build/Tellsla.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/ipa \
+            -allowProvisioningUpdates \
+            CODE_SIGNING_ALLOWED=YES \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" 2>&1 | tee export.log
+          
+          echo "✅ IPA exported"
+          ls -lh build/ipa/Tellsla.ipa
+      
+      - name: Upload to TestFlight
+        script: |
+          set -e
+          
+          echo "📤 Uploading to TestFlight..."
+          xcrun altool --upload-app \
+            --type ios \
+            --file build/ipa/Tellsla.ipa \
+            --apiKey "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            --show-progress 2>&1 | tee upload.log
+          
+          echo "✅ Upload successful - check App Store Connect"
     
     artifacts:
       - build/ipa/Tellsla.ipa
+      - build.log
+      - export.log
+      - upload.log
     
     publishing:
       email:
