@@ -18,27 +18,50 @@ class CommunityViewModel {
 
     func loadReports(near coordinate: CLLocationCoordinate2D) async {
         isLoading = true
-        isLoading = false
+        defer { isLoading = false }
+        
+        do {
+            let nearby = try await BackendService.shared.getNearbyReports(
+                lat: coordinate.latitude,
+                lon: coordinate.longitude,
+                radius: 10
+            )
+            await MainActor.run {
+                self.reports = nearby.sorted { $0.timestamp > $1.timestamp }
+            }
+        } catch {
+            await CrashLogService.shared.log(.error, message: "Failed to load reports: \(error.localizedDescription)", context: "CommunityViewModel")
+        }
     }
 
-    func submitReport(type: ReportType, coordinate: CLLocationCoordinate2D, description: String) {
-        let report = CommunityReport(
-            id: UUID().uuidString,
-            type: type,
-            latitude: coordinate.latitude,
-            longitude: coordinate.longitude,
-            heading: nil,
-            description: description,
-            reporterDisplayName: "You",
-            vehicleModel: .model3,
-            upvotes: 1,
-            downvotes: 0,
-            isVerified: false,
-            createdAt: Date(),
-            expiresAt: Date().addingTimeInterval(type.defaultExpiry),
-            imageURL: nil
-        )
-        reports.insert(report, at: 0)
+    func submitReport(type: ReportType, coordinate: CLLocationCoordinate2D, description: String) async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            let response = try await BackendService.shared.submitReport(
+                lat: coordinate.latitude,
+                lon: coordinate.longitude,
+                type: type.rawValue,
+                message: description
+            )
+            
+            let report = CommunityReport(
+                id: response.reportId,
+                userId: "current_user",
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude,
+                reportType: type.rawValue,
+                message: description,
+                timestamp: Date()
+            )
+            
+            await MainActor.run {
+                self.reports.insert(report, at: 0)
+            }
+        } catch {
+            await CrashLogService.shared.log(.error, message: "Failed to submit report: \(error.localizedDescription)", context: "CommunityViewModel")
+        }
     }
 
     func upvoteReport(_ report: CommunityReport) {

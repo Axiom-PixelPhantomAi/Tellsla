@@ -1,150 +1,202 @@
 import SwiftUI
+import WatchConnectivity
 
 struct ContentView: View {
-    @State private var batteryLevel: Int = 78
-    @State private var isLocked: Bool = true
-    @State private var isClimateOn: Bool = false
-    @State private var range: Double = 245
-    @State private var isCharging: Bool = false
-
+    @State private var vehicle: Vehicle?
+    @State private var isLoading = true
+    @State private var batteryLevel = 0
+    @State private var range = 0
+    @State private var isCharging = false
+    
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 12) {
-                    batteryCard
-                    controlsGrid
-                    statusCard
-                }
-                .padding(.horizontal, 4)
-            }
-            .navigationTitle("Tellsla")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-
-    private var batteryCard: some View {
-        VStack(spacing: 6) {
-            ZStack {
-                Circle()
-                    .stroke(Color(.darkGray), lineWidth: 6)
-                    .frame(width: 70, height: 70)
-                Circle()
-                    .trim(from: 0, to: Double(batteryLevel) / 100.0)
-                    .stroke(batteryColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                    .frame(width: 70, height: 70)
-                    .rotationEffect(.degrees(-90))
-                VStack(spacing: 0) {
-                    Text("\(batteryLevel)")
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                    Text("%")
-                        .font(.system(size: 10))
+            VStack(spacing: 16) {
+                // Battery Ring
+                VStack {
+                    ZStack {
+                        Circle()
+                            .stroke(Color(.tertiarySystemFill), lineWidth: 6)
+                        
+                        Circle()
+                            .trim(from: 0, to: Double(batteryLevel) / 100)
+                            .stroke(batteryColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                        
+                        VStack(spacing: 2) {
+                            Text("\(batteryLevel)")
+                                .font(.system(size: 22, weight: .bold))
+                            Text("%")
+                                .font(.caption)
+                        }
+                    }
+                    .frame(width: 80, height: 80)
+                    
+                    Text("\(range) mi")
+                        .font(.headline)
                         .foregroundStyle(.secondary)
                 }
-            }
-
-            Text("\(Int(range)) mi")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
-            if isCharging {
-                HStack(spacing: 4) {
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(.green)
-                    Text("Charging")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.green)
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(10)
+                
+                // Quick Actions
+                VStack(spacing: 10) {
+                    NavigationLink(destination: LockedView()) {
+                        HStack {
+                            Image(systemName: "lock.fill")
+                            Text("Lock")
+                            Spacer()
+                        }
+                        .padding(10)
+                        .background(Color.blue.opacity(0.2))
+                        .cornerRadius(8)
+                    }
+                    
+                    NavigationLink(destination: ClimateView()) {
+                        HStack {
+                            Image(systemName: isCharging ? "bolt.fill" : "thermometer.half")
+                            Text(isCharging ? "Charging" : "Climate")
+                            Spacer()
+                        }
+                        .padding(10)
+                        .background(isCharging ? Color.green.opacity(0.2) : Color.orange.opacity(0.2))
+                        .cornerRadius(8)
+                    }
+                    
+                    NavigationLink(destination: FindMyTeslaView()) {
+                        HStack {
+                            Image(systemName: "location.fill")
+                            Text("Find My Tesla")
+                            Spacer()
+                        }
+                        .padding(10)
+                        .background(Color.purple.opacity(0.2))
+                        .cornerRadius(8)
+                    }
                 }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-    }
-
-    private var controlsGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-            WatchControlButton(
-                icon: isLocked ? "lock.fill" : "lock.open.fill",
-                label: isLocked ? "Unlock" : "Lock",
-                color: .blue
-            ) {
-                isLocked.toggle()
-            }
-
-            WatchControlButton(
-                icon: isClimateOn ? "snowflake" : "thermometer.medium",
-                label: "Climate",
-                color: isClimateOn ? .cyan : .orange
-            ) {
-                isClimateOn.toggle()
-            }
-
-            WatchControlButton(
-                icon: "lightbulb.fill",
-                label: "Flash",
-                color: .yellow
-            ) {}
-
-            WatchControlButton(
-                icon: "speaker.wave.3.fill",
-                label: "Horn",
-                color: .purple
-            ) {}
-        }
-    }
-
-    private var statusCard: some View {
-        VStack(spacing: 6) {
-            HStack {
-                Image(systemName: isLocked ? "lock.fill" : "lock.open.fill")
-                    .font(.caption2)
-                    .foregroundStyle(isLocked ? .green : .orange)
-                Text(isLocked ? "Locked" : "Unlocked")
-                    .font(.caption2)
+                
                 Spacer()
             }
-            HStack {
-                Image(systemName: "thermometer")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text("72°F Interior")
-                    .font(.caption2)
-                Spacer()
-            }
+            .padding()
+            .navigationTitle("Tesla")
         }
-        .padding(8)
-        .background(Color(.darkGray).opacity(0.3))
-        .clipShape(.rect(cornerRadius: 10))
+        .onAppear {
+            loadVehicleData()
+        }
     }
-
+    
     private var batteryColor: Color {
-        if batteryLevel > 60 { return .green }
+        if batteryLevel > 50 { return .green }
         if batteryLevel > 20 { return .yellow }
         return .red
     }
+    
+    private func loadVehicleData() {
+        Task {
+            do {
+                let vehicles = try await TeslaAPIService.shared.fetchVehicles()
+                if let vehicle = vehicles.first {
+                    await MainActor.run {
+                        self.vehicle = vehicle
+                        self.batteryLevel = vehicle.batteryLevel
+                        self.range = Int(vehicle.batteryRange)
+                        self.isCharging = vehicle.chargingState == .charging
+                        self.isLoading = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.isLoading = false
+                }
+            }
+        }
+    }
 }
 
-struct WatchControlButton: View {
-    let icon: String
-    let label: String
-    let color: Color
-    let action: () -> Void
-
+// MARK: - Lock View
+struct LockedView: View {
+    @State private var isLocked = false
+    @Environment(\.dismiss) var dismiss
+    
     var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.body)
-                    .foregroundStyle(color)
-                Text(label)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.primary)
+        VStack(spacing: 20) {
+            Text(isLocked ? "🔒 Locked" : "🔓 Unlocked")
+                .font(.headline)
+            
+            Button {
+                Task {
+                    // Placeholder for lock command
+                    isLocked.toggle()
+                }
+            } label: {
+                Text(isLocked ? "Unlock" : "Lock")
+                    .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(color.opacity(0.15))
-            .clipShape(.rect(cornerRadius: 10))
+            .buttonStyle(.bordered)
+            
+            Button("Back") { dismiss() }
         }
-        .buttonStyle(.plain)
+        .padding()
     }
+}
+
+// MARK: - Climate View
+struct ClimateView: View {
+    @State private var temperature = 72
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Climate Control")
+                .font(.headline)
+            
+            HStack {
+                Button { temperature = max(60, temperature - 1) } label: {
+                    Image(systemName: "minus.circle.fill")
+                }
+                Text("\(temperature)°F")
+                    .font(.title3.bold())
+                Button { temperature = min(90, temperature + 1) } label: {
+                    Image(systemName: "plus.circle.fill")
+                }
+            }
+            
+            Button("Start Climate") {
+                Task {
+                    // Placeholder for climate command
+                }
+            }
+            .buttonStyle(.bordered)
+            
+            Button("Back") { dismiss() }
+        }
+        .padding()
+    }
+}
+
+// MARK: - Find My Tesla View
+struct FindMyTeslaView: View {
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("📍 Find My Tesla")
+                .font(.headline)
+            
+            VStack(spacing: 8) {
+                Text("0.3 mi East")
+                    .font(.subheadline)
+                Text("↗ Northeast")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            Button("Back") { dismiss() }
+        }
+        .padding()
+    }
+}
+
+#Preview {
+    ContentView()
 }
