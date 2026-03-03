@@ -6,9 +6,6 @@ workflows:
     triggering:
       events:
         - push
-      branch:
-        include:
-          - main
     environment:
       xcode: latest
       vars:
