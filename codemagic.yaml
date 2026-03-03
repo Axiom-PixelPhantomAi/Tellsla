@@ -11,21 +11,14 @@ workflows:
       vars:
         APP_STORE_CONNECT_ISSUER_ID: 23c1e19b-ffc3-4fe0-a48d-395c84ca3c0b
         APP_STORE_CONNECT_KEY_IDENTIFIER: WBU777B3N3
-        XCODE_WORKSPACE: Tellsla.xcworkspace
+        XCODE_PROJECT: Tellsla.xcodeproj
         XCODE_SCHEME: Tellsla
         BUNDLE_ID: app.rork.tellsla
     scripts:
-      - name: Install Dependencies
-        script: |
-          set -e
-          if [ -f "Podfile" ]; then
-            pod install --repo-update
-          fi
-      
       - name: Build Archive
         script: |
           set -e
-          xcodebuild -workspace "$XCODE_WORKSPACE" \
+          xcodebuild -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
             -derivedDataPath build \
