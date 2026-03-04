@@ -1,0 +1,110 @@
+name: iOS TestFlight Build & Upload
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-upload:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Xcode
+        run: |
+          sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+          xcodebuild -version
+      
+      - name: Setup App Store Connect API Key
+        env:
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" | base64 -d > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
+          echo "✅ API key configured"
+      
+      - name: Build Archive (No Code Signing)
+        run: |
+          set -e
+          
+          xcodebuild build-for-testing \
+            -project Tellsla.xcodeproj \
+            -scheme Tellsla \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            -derivedDataPath build \
+            -skipPackagePluginValidation \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            PROVISIONING_PROFILE="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            OTHER_CODE_SIGN_FLAGS=""
+          
+          echo "✅ Build completed without signing"
+      
+      - name: Create Archive (No Code Signing)
+        run: |
+          set -e
+          
+          xcodebuild archive \
+            -project Tellsla.xcodeproj \
+            -scheme Tellsla \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            -derivedDataPath build \
+            -archivePath build/Tellsla.xcarchive \
+            -skipPackagePluginValidation \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            PROVISIONING_PROFILE="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            OTHER_CODE_SIGN_FLAGS=""
+          
+          echo "✅ Archive created (unsigned)"
+          ls -lh build/Tellsla.xcarchive
+      
+      - name: Export & Sign IPA
+        run: |
+          set -e
+          
+          xcodebuild -exportArchive \
+            -archivePath build/Tellsla.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/ipa \
+            -allowProvisioningUpdates \
+            CODE_SIGNING_ALLOWED=YES \
+            DEVELOPMENT_TEAM=${{ secrets.DEVELOPMENT_TEAM }}
+          
+          echo "✅ IPA exported and signed"
+          ls -lh build/ipa/Tellsla.ipa
+      
+      - name: Upload to TestFlight
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+        run: |
+          set -e
+          
+          xcrun altool --upload-app \
+            --type ios \
+            --file build/ipa/Tellsla.ipa \
+            --apiKey "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            --show-progress
+          
+          echo "✅ TestFlight upload successful"
+      
+      - name: Upload IPA as artifact
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Tellsla.ipa
+          path: build/ipa/Tellsla.ipa
+          retention-days: 7
