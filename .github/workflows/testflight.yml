@@ -174,12 +174,8 @@ jobs:
           echo "ℹ️  TestFlight upload initiated. Verify in App Store Connect: https://appstoreconnect.apple.com"
           echo "ℹ️  Build should appear in Builds list within 5-10 minutes"
       
-      - name: Upload workflow logs
+      - name: Summary
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs-${{ github.run_id }}
-          path: |
-            ${{ runner.temp }}/build/Logs/Build/*.log
-          retention-days: 7
-          if-no-files-found: warn
+        run: |
+          echo "Build workflow completed"
+          echo "Check TestFlight at: https://appstoreconnect.apple.com"
