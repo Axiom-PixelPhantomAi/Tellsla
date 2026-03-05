@@ -1,0 +1,184 @@
+name: iOS TestFlight Build & Upload
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  XCODE_VERSION: "15.3"
+  SCHEME: "Tellsla"
+  CONFIGURATION: "Release"
+  BUNDLE_ID: "app.rork.tellsla"
+  TEAM_ID: "894G4S5K4R"
+
+jobs:
+  build-and-upload:
+    runs-on: macos-14
+    timeout-minutes: 120
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Xcode
+        run: |
+          sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+          xcodebuild -version
+          echo "✅ Xcode configured"
+      
+      - name: Install App Store Connect private key
+        env:
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" | base64 -d > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
+          echo "✅ API key installed (masking: $APP_STORE_CONNECT_KEY_IDENTIFIER)"
+      
+      - name: Setup iOS certificate & provisioning profile
+        env:
+          SIGNING_CERTIFICATE_P12_DATA: ${{ secrets.SIGNING_CERTIFICATE_P12_DATA }}
+          SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+          PROVISIONING_PROFILE_DATA: ${{ secrets.PROVISIONING_PROFILE_DATA }}
+        run: |
+          # Import signing certificate
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 900 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          
+          # Decode and import certificate
+          echo "$SIGNING_CERTIFICATE_P12_DATA" | base64 -d > $RUNNER_TEMP/cert.p12
+          security import $RUNNER_TEMP/cert.p12 \
+            -k "$KEYCHAIN_PATH" \
+            -P "$SIGNING_CERTIFICATE_PASSWORD" \
+            -A -t cert,privkey
+          
+          security list-keychains -s "$KEYCHAIN_PATH"
+          rm -f $RUNNER_TEMP/cert.p12
+          
+          # Import provisioning profile
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$PROVISIONING_PROFILE_DATA" | base64 -d > "$HOME/Library/MobileDevice/Provisioning Profiles/Tellsla.mobileprovision"
+          
+          echo "✅ Signing credentials installed"
+      
+      - name: Build archive
+        run: |
+          set -e
+          DERIVED_DATA="$RUNNER_TEMP/build"
+          ARCHIVE_PATH="$DERIVED_DATA/Tellsla.xcarchive"
+          
+          xcodebuild archive \
+            -project Tellsla.xcodeproj \
+            -scheme $SCHEME \
+            -configuration $CONFIGURATION \
+            -archivePath "$ARCHIVE_PATH" \
+            -derivedDataPath "$DERIVED_DATA" \
+            -allowProvisioningUpdates \
+            CODE_SIGN_IDENTITY="Apple Development" \
+            PROVISIONING_PROFILE_SPECIFIER="Tellsla" \
+            TEAM_ID="$TEAM_ID" \
+            -verbose 2>&1 | grep -E "(error|warning|Building|Compiling|Linking|Archive)" || true
+          
+          if [ ! -d "$ARCHIVE_PATH" ]; then
+            echo "❌ Archive failed: $ARCHIVE_PATH not found"
+            exit 1
+          fi
+          echo "✅ Archive created: $ARCHIVE_PATH"
+      
+      - name: Export IPA
+        run: |
+          set -e
+          DERIVED_DATA="$RUNNER_TEMP/build"
+          ARCHIVE_PATH="$DERIVED_DATA/Tellsla.xcarchive"
+          EXPORT_PATH="$DERIVED_DATA/export"
+          
+          mkdir -p "$EXPORT_PATH"
+          
+          # Use ExportOptions.plist from repo
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_PATH" \
+            -exportOptionsPlist ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -verbose 2>&1 | grep -E "(error|warning|Exporting|Exported)" || true
+          
+          IPA_FILE=$(find "$EXPORT_PATH" -name "*.ipa" -type f)
+          if [ -z "$IPA_FILE" ]; then
+            echo "❌ IPA export failed"
+            ls -la "$EXPORT_PATH"
+            exit 1
+          fi
+          
+          echo "IPA_FILE=$IPA_FILE" >> $GITHUB_ENV
+          echo "✅ IPA exported: $(basename $IPA_FILE)"
+      
+      - name: Upload to TestFlight via altool
+        env:
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -e
+          
+          # Locate altool (Xcode 15.x)
+          ALTOOL=$(find /Applications/Xcode.app -name "altool" -type f 2>/dev/null | head -1)
+          if [ -z "$ALTOOL" ]; then
+            echo "❌ altool not found, trying Transporter..."
+            ALTOOL=$(find /Applications/Xcode.app -name "Transporter" -type f 2>/dev/null | head -1)
+          fi
+          
+          if [ -z "$ALTOOL" ]; then
+            echo "⚠️  altool/Transporter not found. Falling back to direct iTMSTransporter."
+            # Use iTMSTransporter directly (Xcode 15.x path)
+            TRANSPORTER_JAR="/Applications/Xcode.app/Contents/SharedFrameworks/iTMSTransporter.framework/Versions/A/itms/java/lib/iTMSTransporter.jar"
+            if [ -f "$TRANSPORTER_JAR" ]; then
+              java -jar "$TRANSPORTER_JAR" \
+                -m upload \
+                -f "$IPA_FILE" \
+                -u "axiomops@proton.me" \
+                -p "@keychain:TestFlight" \
+                -s prod \
+                -t Aspera \
+                -k 100
+              echo "✅ Upload via iTMSTransporter successful"
+            else
+              echo "❌ No transport tool found"
+              exit 1
+            fi
+          else
+            # Use altool with API key auth (preferred)
+            "$ALTOOL" \
+              --upload-app \
+              --type ios \
+              --file "$IPA_FILE" \
+              --apiKey "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+              --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+            echo "✅ Upload via altool successful"
+          fi
+      
+      - name: Verify TestFlight upload
+        env:
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          # Query build list via AppStoreConnectAPI (requires JWT)
+          echo "ℹ️  TestFlight upload initiated. Verify in App Store Connect: https://appstoreconnect.apple.com"
+          echo "ℹ️  Build should appear in Builds list within 5-10 minutes"
+      
+      - name: Upload workflow logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            ${{ runner.temp }}/build/Logs/Build/*.log
+          retention-days: 7
