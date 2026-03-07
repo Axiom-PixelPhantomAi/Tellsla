@@ -53,10 +53,46 @@ jobs:
           rm -f /tmp/dist.p12
           echo "✅ Signing credentials installed"
 
-      - name: Build archive (manual signing)
+      - name: Install provisioning profiles
         env:
           APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          # Download profiles from ASC and install them
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          for profile_id in U322D896CS 439ZSJV664 W7R54CM73X; do
+            xcrun notarytool store-credentials 2>/dev/null || true
+            curl -s \
+              -H "Authorization: Bearer $(python3 -c "
+import jwt, time
+key_id = '$APP_STORE_CONNECT_KEY_IDENTIFIER'
+issuer_id = '$APP_STORE_CONNECT_ISSUER_ID'
+with open(\"$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8\") as f:
+    private_key = f.read()
+payload = {'iss': issuer_id, 'exp': int(time.time()) + 1200, 'aud': 'appstoreconnect-v1'}
+print(jwt.encode(payload, private_key, algorithm='ES256', headers={'kid': key_id}))
+")" \
+              "https://api.appstoreconnect.apple.com/v1/profiles/$profile_id" | \
+              python3 -c "
+import sys, json, base64
+data = json.load(sys.stdin)
+content = data['data']['attributes']['profileContent']
+with open('/tmp/profile_$profile_id.mobileprovision', 'wb') as f:
+    f.write(base64.b64decode(content))
+import subprocess
+uuid_bytes = subprocess.check_output(['security', 'cms', '-D', '-i', '/tmp/profile_$profile_id.mobileprovision'])
+import plistlib
+plist = plistlib.loads(uuid_bytes)
+uuid = plist.get('UUID', '$profile_id')
+import shutil, os
+dest = os.path.expanduser(f'~/Library/MobileDevice/Provisioning Profiles/{uuid}.mobileprovision')
+shutil.copy('/tmp/profile_$profile_id.mobileprovision', dest)
+print(f'Installed {uuid}.mobileprovision')
+"
+          done
+          echo "✅ Provisioning profiles installed"
+
+      - name: Build archive (unsigned)
         run: |
           set -e
           DERIVED_DATA="$RUNNER_TEMP/build"
@@ -68,14 +104,9 @@ jobs:
             -configuration $CONFIGURATION \
             -archivePath "$ARCHIVE_PATH" \
             -derivedDataPath "$DERIVED_DATA" \
-            -allowProvisioningUpdates \
-            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
-            -authenticationKeyPath "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
-            CODE_SIGN_STYLE=Automatic \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
             SUPPORTS_MACCATALYST=NO \
-            OTHER_CODE_SIGN_FLAGS="--keychain build.keychain" \
             2>&1 | grep -E "(error:|warning:|Build succeeded|Archive succeeded|FAILED)" || true
 
           if [ ! -d "$ARCHIVE_PATH" ]; then
@@ -86,9 +117,6 @@ jobs:
           echo "✅ Archive created"
 
       - name: Export IPA
-        env:
-          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           set -e
           DERIVED_DATA="$RUNNER_TEMP/build"
@@ -100,10 +128,7 @@ jobs:
             -archivePath "$ARCHIVE_PATH" \
             -exportPath "$EXPORT_PATH" \
             -exportOptionsPlist ExportOptions.plist \
-            -allowProvisioningUpdates \
-            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
-            -authenticationKeyPath "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
+            OTHER_CODE_SIGN_FLAGS="--keychain build.keychain" \
             2>&1 | grep -E "(error:|warning:|Export succeeded|FAILED)" || true
 
           IPA_FILE=$(find "$EXPORT_PATH" -name "*.ipa" -type f | head -1)
