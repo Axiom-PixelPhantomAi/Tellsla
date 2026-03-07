@@ -13,20 +13,22 @@ struct AuthView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            MeshGradient(
-                width: 3, height: 3,
-                points: [
-                    [0, 0], [0.5, 0], [1, 0],
-                    [0, 0.5], [0.5, 0.5], [1, 0.5],
-                    [0, 1], [0.5, 1], [1, 1]
-                ],
-                colors: [
-                    .black, .black, .black,
-                    Color(red: 0.05, green: 0.05, blue: 0.15), Color(red: 0.1, green: 0.05, blue: 0.2), Color(red: 0.05, green: 0.05, blue: 0.15),
-                    .black, Color(red: 0.05, green: 0.1, blue: 0.2), .black
-                ]
-            )
-            .ignoresSafeArea()
+            if #available(iOS 18.0, *) {
+                MeshGradient(
+                    width: 3, height: 3,
+                    points: [
+                        [0, 0], [0.5, 0], [1, 0],
+                        [0, 0.5], [0.5, 0.5], [1, 0.5],
+                        [0, 1], [0.5, 1], [1, 1]
+                    ],
+                    colors: [
+                        .black, .black, .black,
+                        Color(red: 0.05, green: 0.05, blue: 0.15), Color(red: 0.1, green: 0.05, blue: 0.2), Color(red: 0.05, green: 0.05, blue: 0.15),
+                        .black, Color(red: 0.05, green: 0.1, blue: 0.2), .black
+                    ]
+                )
+                .ignoresSafeArea()
+            }
 
             VStack(spacing: 40) {
                 Spacer()

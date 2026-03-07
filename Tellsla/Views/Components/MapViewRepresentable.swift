@@ -23,7 +23,7 @@ struct MapViewRepresentable: UIViewRepresentable {
                 return nil // Use default blue dot
             }
 
-            if let supercharger = annotation as? Supercharger {
+            if let supercharger = annotation as? SuperchargerAnnotation {
                 let identifier = "supercharger"
                 var view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
 
@@ -41,8 +41,8 @@ struct MapViewRepresentable: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-            if let route = overlay as? MKRoute {
-                let renderer = MKPolylineRenderer(polyline: route.polyline)
+            if let polyline = overlay as? MKPolyline {
+                let renderer = MKPolylineRenderer(polyline: polyline)
                 renderer.strokeColor = UIColor(red: 0, green: 0.5, blue: 1, alpha: 0.8)
                 renderer.lineWidth = 4
                 return renderer
@@ -98,7 +98,7 @@ struct MapViewRepresentable: UIViewRepresentable {
         mapView.setCamera(camera, animated: false)
 
         // Add Supercharger annotations
-        mapView.addAnnotations(superchargers)
+        mapView.addAnnotations(superchargers.map(SuperchargerAnnotation.init))
 
         return mapView
     }
@@ -117,10 +117,10 @@ struct MapViewRepresentable: UIViewRepresentable {
 
         // Update route overlay
         if let route = routeOverlay {
-            mapView.addOverlay(route)
+            mapView.addOverlay(route.polyline)
         } else {
             mapView.overlays.forEach { overlay in
-                if overlay is MKRoute {
+                if overlay is MKPolyline {
                     mapView.removeOverlay(overlay)
                 }
             }
@@ -158,17 +158,19 @@ class VehicleAnnotation: NSObject, MKAnnotation {
     }
 }
 
-// Supercharger annotation (extend the model if needed)
-extension Supercharger: MKAnnotation {
-    @objc dynamic var coordinate: CLLocationCoordinate2D {
-        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+// Supercharger annotation wrapper (MKAnnotation requires a class)
+final class SuperchargerAnnotation: NSObject, MKAnnotation {
+    let supercharger: Supercharger
+
+    init(_ supercharger: Supercharger) {
+        self.supercharger = supercharger
+        super.init()
     }
 
-    @objc dynamic var title: String? {
-        name
-    }
-
-    @objc dynamic var subtitle: String? {
-        "\(availableStalls) of \(totalStalls) stalls • \(pricePerKwh)¢/kWh"
+    var coordinate: CLLocationCoordinate2D { supercharger.coordinate }
+    var title: String? { supercharger.name }
+    var subtitle: String? {
+        let price = supercharger.pricePerKWh.map { "\(String(format: "%.0f", $0 * 100))¢/kWh" } ?? ""
+        return "\(supercharger.availableStalls) of \(supercharger.totalStalls) stalls\(price.isEmpty ? "" : " • \(price)")"
     }
 }

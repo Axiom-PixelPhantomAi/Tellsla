@@ -5,7 +5,20 @@ struct iPadLayout: View {
     @State private var selectedTab: String = "navigate"
     @State private var showDetailPanel = true
     @Bindable var appState: AppState
-    
+    @State private var locationService: LocationService
+    @State private var navViewModel: NavigationViewModel
+    @State private var routinesViewModel = RoutinesViewModel()
+    @State private var energyViewModel = EnergyViewModel()
+    @State private var vehicleViewModel = VehicleViewModel()
+    @State private var communityViewModel = CommunityViewModel()
+
+    init(appState: AppState) {
+        _appState = Bindable(wrappedValue: appState)
+        let loc = LocationService()
+        _locationService = State(initialValue: loc)
+        _navViewModel = State(initialValue: NavigationViewModel(locationService: loc))
+    }
+
     var body: some View {
         NavigationSplitView {
             // Sidebar
@@ -43,15 +56,15 @@ struct iPadLayout: View {
             ZStack {
                 switch selectedTab {
                 case "navigate":
-                    NavigateTabView(viewModel: appState.navigationVM, locationService: appState.locationService, appState: appState)
+                    NavigateTabView(viewModel: navViewModel, locationService: locationService, appState: appState)
                 case "energy":
-                    EnergyTabView(viewModel: appState.energyVM, vehicle: appState.selectedVehicle, appState: appState)
+                    EnergyTabView(viewModel: energyViewModel, vehicle: appState.selectedVehicle, appState: appState)
                 case "routines":
-                    RoutinesTabView(viewModel: appState.routinesVM, appState: appState)
+                    RoutinesTabView(viewModel: routinesViewModel, appState: appState)
                 case "community":
-                    CommunityTabView(viewModel: appState.communityVM, locationService: appState.locationService, appState: appState)
+                    CommunityTabView(viewModel: communityViewModel, locationService: locationService, appState: appState)
                 case "vehicle":
-                    VehicleTabView(viewModel: appState.vehicleVM, vehicle: appState.selectedVehicle, appState: appState)
+                    VehicleTabView(viewModel: vehicleViewModel, vehicle: appState.selectedVehicle, appState: appState)
                 case "settings":
                     SettingsView(appState: appState)
                 default:
@@ -60,7 +73,7 @@ struct iPadLayout: View {
             }
             .navigationTitle(selectedTab.capitalized)
         }
-        .navigationSplitViewStyle(.prominent)
+        .navigationSplitViewStyle(.prominentDetail)
     }
 }
 

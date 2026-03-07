@@ -156,7 +156,7 @@ struct CommunityTabView: View {
 
     private func quickReport(_ type: ReportType) {
         guard let coord = locationService.location?.coordinate else { return }
-        viewModel.submitReport(type: type, coordinate: coord, description: type.rawValue)
+        Task { await viewModel.submitReport(type: type, coordinate: coord, description: type.rawValue) }
     }
 }
 
@@ -281,12 +281,14 @@ struct NewReportSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Submit") {
                         guard let coord = locationService.location?.coordinate else { return }
-                        viewModel.submitReport(
-                            type: selectedType,
-                            coordinate: coord,
-                            description: description.isEmpty ? selectedType.rawValue : description
-                        )
-                        dismiss()
+                        Task {
+                            await viewModel.submitReport(
+                                type: selectedType,
+                                coordinate: coord,
+                                description: description.isEmpty ? selectedType.rawValue : description
+                            )
+                            dismiss()
+                        }
                     }
                 }
             }
