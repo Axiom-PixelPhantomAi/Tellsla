@@ -2,10 +2,8 @@ import SwiftUI
 import WatchConnectivity
 
 struct ContentView: View {
-    @State private var vehicle: Vehicle?
-    @State private var isLoading = true
-    @State private var batteryLevel = 0
-    @State private var range = 0
+    @State private var batteryLevel = 75
+    @State private var range = 180
     @State private var isCharging = false
     
     var body: some View {
@@ -15,7 +13,7 @@ struct ContentView: View {
                 VStack {
                     ZStack {
                         Circle()
-                            .stroke(Color(.tertiarySystemFill), lineWidth: 6)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 6)
                         
                         Circle()
                             .trim(from: 0, to: Double(batteryLevel) / 100)
@@ -36,7 +34,7 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding()
-                .background(Color(.secondarySystemGroupedBackground))
+                .background(Color.gray.opacity(0.1))
                 .cornerRadius(10)
                 
                 // Quick Actions
@@ -80,36 +78,12 @@ struct ContentView: View {
             .padding()
             .navigationTitle("Tesla")
         }
-        .onAppear {
-            loadVehicleData()
-        }
     }
     
     private var batteryColor: Color {
         if batteryLevel > 50 { return .green }
         if batteryLevel > 20 { return .yellow }
         return .red
-    }
-    
-    private func loadVehicleData() {
-        Task {
-            do {
-                let vehicles = try await TeslaAPIService.shared.fetchVehicles()
-                if let vehicle = vehicles.first {
-                    await MainActor.run {
-                        self.vehicle = vehicle
-                        self.batteryLevel = vehicle.batteryLevel
-                        self.range = Int(vehicle.batteryRange)
-                        self.isCharging = vehicle.chargingState == .charging
-                        self.isLoading = false
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    self.isLoading = false
-                }
-            }
-        }
     }
 }
 
