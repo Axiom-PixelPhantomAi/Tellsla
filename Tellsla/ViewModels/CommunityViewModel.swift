@@ -27,7 +27,7 @@ class CommunityViewModel {
                 radius: 10
             )
             await MainActor.run {
-                self.reports = nearby.sorted { $0.timestamp > $1.timestamp }
+                self.reports = nearby.sorted { $0.createdAt > $1.createdAt }
             }
         } catch {
             await CrashLogService.shared.log(.error, message: "Failed to load reports: \(error.localizedDescription)", context: "CommunityViewModel")
@@ -48,12 +48,15 @@ class CommunityViewModel {
             
             let report = CommunityReport(
                 id: response.reportId,
-                userId: "current_user",
+                type: type,
                 latitude: coordinate.latitude,
                 longitude: coordinate.longitude,
-                reportType: type.rawValue,
-                message: description,
-                timestamp: Date()
+                description: description,
+                reporterDisplayName: "Me",
+                upvotes: 0,
+                downvotes: 0,
+                isVerified: false,
+                createdAt: Date()
             )
             
             await MainActor.run {

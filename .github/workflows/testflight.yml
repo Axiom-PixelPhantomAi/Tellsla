@@ -7,10 +7,8 @@ on:
   workflow_dispatch:
 
 env:
-  XCODE_VERSION: "15.3"
   SCHEME: "Tellsla"
   CONFIGURATION: "Release"
-  BUNDLE_ID: "app.rork.tellsla"
   TEAM_ID: "894G4S5K4R"
 
 jobs:
@@ -28,35 +26,54 @@ jobs:
         run: |
           sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
           xcodebuild -version
-          echo "✅ Xcode configured"
+          echo "Xcode configured"
 
-      - name: Install App Store Connect private key
+      - name: Install signing credentials
         env:
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
           APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          DISTRIBUTION_CERTIFICATE_P12: ${{ secrets.DISTRIBUTION_CERTIFICATE_P12 }}
+          DISTRIBUTION_CERTIFICATE_P12_PASSWORD: ${{ secrets.DISTRIBUTION_CERTIFICATE_P12_PASSWORD }}
+          PROV_PROFILE_MAIN: ${{ secrets.PROV_PROFILE_MAIN }}
+          PROV_PROFILE_WIDGET: ${{ secrets.PROV_PROFILE_WIDGET }}
+          PROV_PROFILE_WATCH: ${{ secrets.PROV_PROFILE_WATCH }}
         run: |
+          set -e
+
+          # Install ASC API key
           mkdir -p ~/.appstoreconnect/private_keys
           echo "$APP_STORE_CONNECT_PRIVATE_KEY" | base64 -d > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
           chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
-          echo "✅ ASC API key installed"
 
-      - name: Build archive (automatic signing)
-        env:
-          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          # Create keychain and import distribution certificate
+          echo "$DISTRIBUTION_CERTIFICATE_P12" | base64 -d > /tmp/dist.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import /tmp/dist.p12 -k build.keychain \
+            -P "$DISTRIBUTION_CERTIFICATE_P12_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/xcodebuild
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
+          rm -f /tmp/dist.p12
+
+          # Install provisioning profiles
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROV_PROFILE_MAIN"   | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/tellsla_main.mobileprovision
+          echo "$PROV_PROFILE_WIDGET" | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/tellsla_widget.mobileprovision
+          echo "$PROV_PROFILE_WATCH"  | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/tellsla_watch.mobileprovision
+
+          echo "Signing credentials installed"
+
+      - name: Build archive
         run: |
           set -e
           DERIVED_DATA="$RUNNER_TEMP/build"
           ARCHIVE_PATH="$DERIVED_DATA/Tellsla.xcarchive"
 
-          # Build archive without code signing (signing happens in export phase)
-          echo "Building archive without code signing..."
-          
           xcodebuild archive \
             -project Tellsla.xcodeproj \
-            -scheme $SCHEME \
-            -configuration $CONFIGURATION \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
             -archivePath "$ARCHIVE_PATH" \
             -derivedDataPath "$DERIVED_DATA" \
             CODE_SIGNING_ALLOWED=NO \
@@ -65,16 +82,13 @@ jobs:
             2>&1 | grep -E "(error:|warning:|Build succeeded|Archive succeeded|FAILED)" || true
 
           if [ ! -d "$ARCHIVE_PATH" ]; then
-            echo "❌ Archive not found: $ARCHIVE_PATH"
+            echo "Archive not found: $ARCHIVE_PATH"
             ls -la "$DERIVED_DATA" || true
             exit 1
           fi
-          echo "✅ Archive created"
+          echo "Archive created"
 
       - name: Export IPA
-        env:
-          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           set -e
           DERIVED_DATA="$RUNNER_TEMP/build"
@@ -86,22 +100,17 @@ jobs:
             -archivePath "$ARCHIVE_PATH" \
             -exportPath "$EXPORT_PATH" \
             -exportOptionsPlist ExportOptions.plist \
-            -allowProvisioningUpdates \
-            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
-            -authenticationKeyPath "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
-            CODE_SIGN_STYLE=Automatic \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
+            OTHER_CODE_SIGN_FLAGS="--keychain build.keychain" \
             2>&1 | grep -E "(error:|warning:|Export succeeded|FAILED)" || true
 
           IPA_FILE=$(find "$EXPORT_PATH" -name "*.ipa" -type f | head -1)
           if [ -z "$IPA_FILE" ]; then
-            echo "❌ IPA not found in $EXPORT_PATH"
+            echo "IPA not found in $EXPORT_PATH"
             ls -la "$EXPORT_PATH"
             exit 1
           fi
           echo "IPA_FILE=$IPA_FILE" >> $GITHUB_ENV
-          echo "✅ IPA exported: $(basename $IPA_FILE)"
+          echo "IPA exported: $(basename $IPA_FILE)"
 
       - name: Upload to TestFlight
         env:
@@ -116,4 +125,4 @@ jobs:
             --apiKey "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
             --verbose
-          echo "✅ Uploaded to TestFlight"
+          echo "Uploaded to TestFlight"

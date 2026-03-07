@@ -165,12 +165,15 @@ nonisolated struct ReportData: Codable {
     func toCommunityReport() -> CommunityReport {
         CommunityReport(
             id: id,
-            userId: userId,
+            type: ReportType(rawValue: type) ?? .roadHazard,
             latitude: lat,
             longitude: lon,
-            reportType: type,
-            message: message,
-            timestamp: ISO8601DateFormatter().date(from: timestamp) ?? Date()
+            description: message,
+            reporterDisplayName: userId,
+            upvotes: 0,
+            downvotes: 0,
+            isVerified: false,
+            createdAt: ISO8601DateFormatter().date(from: timestamp) ?? Date()
         )
     }
 }

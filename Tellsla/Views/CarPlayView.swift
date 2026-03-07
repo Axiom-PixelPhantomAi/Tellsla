@@ -111,8 +111,8 @@ struct CarPlayMapTemplate: View {
                 if let first = vehicles.first {
                     selectedVehicle = first
                     superchargers = try await TeslaAPIService.shared.fetchNearbySuperchargers(
-                        latitude: first.location?.latitude ?? 37.7749,
-                        longitude: first.location?.longitude ?? -122.4194
+                        latitude: first.latitude,
+                        longitude: first.longitude
                     )
                 }
             } catch {}

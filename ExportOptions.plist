@@ -7,7 +7,18 @@
 	<key>method</key>
 	<string>app-store</string>
 	<key>signingStyle</key>
-	<string>automatic</string>
+	<string>manual</string>
+	<key>signingCertificate</key>
+	<string>Apple Distribution: ELLIOT XAVIER BRUCE</string>
+	<key>provisioningProfiles</key>
+	<dict>
+		<key>app.rork.tellsla</key>
+		<string>Tellsla AppStore Distribution</string>
+		<key>app.rork.tellsla.tellslawidget</key>
+		<string>Tellsla Widget AppStore Distribution</string>
+		<key>app.rork.tellsla.tellslawatch</key>
+		<string>Tellsla Watch AppStore Distribution</string>
+	</dict>
 	<key>stripSwiftSymbols</key>
 	<true/>
 	<key>teamID</key>

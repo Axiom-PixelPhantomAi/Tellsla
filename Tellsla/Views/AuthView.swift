@@ -13,20 +13,37 @@ struct AuthView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            LinearGradient(
-                gradient: Gradient(
+            if #available(iOS 18.0, *) {
+                MeshGradient(
+                    width: 3, height: 3,
+                    points: [
+                        [0, 0], [0.5, 0], [1, 0],
+                        [0, 0.5], [0.5, 0.5], [1, 0.5],
+                        [0, 1], [0.5, 1], [1, 1]
+                    ],
                     colors: [
-                        Color(.black), 
-                        Color(red: 0.05, green: 0.05, blue: 0.15), 
-                        Color(red: 0.1, green: 0.05, blue: 0.2), 
-                        Color(red: 0.05, green: 0.1, blue: 0.2), 
-                        Color(.black)
+                        .black, .black, .black,
+                        Color(red: 0.05, green: 0.05, blue: 0.15), Color(red: 0.1, green: 0.05, blue: 0.2), Color(red: 0.05, green: 0.05, blue: 0.15),
+                        .black, Color(red: 0.05, green: 0.1, blue: 0.2), .black
                     ]
-                ),
-                startPoint: UnitPoint(x: 0.5, y: 0), 
-                endPoint: UnitPoint(x: 0.5, y: 1)
-            )
-            .ignoresSafeArea()
+                )
+                .ignoresSafeArea()
+            } else {
+                LinearGradient(
+                    gradient: Gradient(
+                        colors: [
+                            Color(.black), 
+                            Color(red: 0.05, green: 0.05, blue: 0.15), 
+                            Color(red: 0.1, green: 0.05, blue: 0.2), 
+                            Color(red: 0.05, green: 0.1, blue: 0.2), 
+                            Color(.black)
+                        ]
+                    ),
+                    startPoint: UnitPoint(x: 0.5, y: 0), 
+                    endPoint: UnitPoint(x: 0.5, y: 1)
+                )
+                .ignoresSafeArea()
+            }
 
             VStack(spacing: 40) {
                 Spacer()
@@ -405,7 +422,7 @@ struct TeslaLoginWebView: View {
     }
 }
 
-struct ASWebAuthenticationPresentationContextProviderImplementation: NSObject, ASWebAuthenticationPresentationContextProviding {
+final class ASWebAuthenticationPresentationContextProviderImplementation: NSObject, ASWebAuthenticationPresentationContextProviding {
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         guard let window = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
             return ASPresentationAnchor()
