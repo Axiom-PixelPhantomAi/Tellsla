@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
 
-nonisolated struct Supercharger: Codable, Identifiable, Hashable, Sendable {
+nonisolated final class Supercharger: NSObject, Codable, Identifiable, Hashable, Sendable, MKAnnotation {
     let id: String
     var name: String
     var address: String
@@ -18,6 +18,14 @@ nonisolated struct Supercharger: Codable, Identifiable, Hashable, Sendable {
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+    
+    var title: String? {
+        name
+    }
+    
+    var subtitle: String? {
+        address
     }
 
     var availabilityPercent: Double {
