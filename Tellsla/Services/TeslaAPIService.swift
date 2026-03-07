@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 
 nonisolated enum TeslaAPIError: Error, Sendable {
     case notAuthenticated

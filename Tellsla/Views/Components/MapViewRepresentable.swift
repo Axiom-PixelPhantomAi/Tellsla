@@ -42,7 +42,7 @@ struct MapViewRepresentable: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let route = overlay as? MKRoute {
-                let renderer = MKRouteRenderer(route: route)
+                let renderer = MKPolylineRenderer(polyline: route.polyline)
                 renderer.strokeColor = UIColor(red: 0, green: 0.5, blue: 1, alpha: 0.8)
                 renderer.lineWidth = 4
                 return renderer
