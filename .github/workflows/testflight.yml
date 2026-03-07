@@ -50,6 +50,14 @@ jobs:
           DERIVED_DATA="$RUNNER_TEMP/build"
           ARCHIVE_PATH="$DERIVED_DATA/Tellsla.xcarchive"
 
+          # Reset code signing settings to Automatic
+          plutil -replace attributes.CODE_SIGN_STYLE -string Automatic Tellsla.xcodeproj/project.pbxproj
+          plutil -replace attributes.DEVELOPMENT_TEAM -string "$TEAM_ID" Tellsla.xcodeproj/project.pbxproj
+          
+          # Verify changes
+          echo "Current code signing style:"
+          plutil -extract attributes.CODE_SIGN_STYLE raw Tellsla.xcodeproj/project.pbxproj
+          
           xcodebuild archive \
             -project Tellsla.xcodeproj \
             -scheme $SCHEME \
@@ -60,12 +68,13 @@ jobs:
             -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
             -authenticationKeyPath "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
-            CODE_SIGN_STYLE=Automatic \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             2>&1 | grep -E "(error:|warning:|Build succeeded|Archive succeeded|FAILED)" || true
 
           if [ ! -d "$ARCHIVE_PATH" ]; then
             echo "❌ Archive not found: $ARCHIVE_PATH"
+            # List derived data for debugging
+            ls -la "$DERIVED_DATA" || true
             exit 1
           fi
           echo "✅ Archive created"
