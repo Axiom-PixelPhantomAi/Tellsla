@@ -71,7 +71,7 @@ struct iPadLayout: View {
                     Text("Select a tab")
                 }
             }
-            .navigationTitle(selectedTab.capitalized)
+            .navigationTitle((selectedTab ?? "navigate").capitalized)
         }
         .navigationSplitViewStyle(.prominentDetail)
     }
