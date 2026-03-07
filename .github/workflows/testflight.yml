@@ -7,10 +7,8 @@ on:
   workflow_dispatch:
 
 env:
-  XCODE_VERSION: "15.3"
   SCHEME: "Tellsla"
   CONFIGURATION: "Release"
-  BUNDLE_ID: "app.rork.tellsla"
   TEAM_ID: "894G4S5K4R"
 
 jobs:
@@ -28,71 +26,45 @@ jobs:
         run: |
           sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
           xcodebuild -version
-          echo "✅ Xcode configured"
+          echo "Xcode configured"
 
       - name: Install signing credentials
         env:
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
           APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           DISTRIBUTION_CERTIFICATE_P12: ${{ secrets.DISTRIBUTION_CERTIFICATE_P12 }}
           DISTRIBUTION_CERTIFICATE_P12_PASSWORD: ${{ secrets.DISTRIBUTION_CERTIFICATE_P12_PASSWORD }}
+          PROV_PROFILE_MAIN: ${{ secrets.PROV_PROFILE_MAIN }}
+          PROV_PROFILE_WIDGET: ${{ secrets.PROV_PROFILE_WIDGET }}
+          PROV_PROFILE_WATCH: ${{ secrets.PROV_PROFILE_WATCH }}
         run: |
+          set -e
+
           # Install ASC API key
           mkdir -p ~/.appstoreconnect/private_keys
           echo "$APP_STORE_CONNECT_PRIVATE_KEY" | base64 -d > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
           chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
 
-          # Import distribution certificate into keychain
+          # Create keychain and import distribution certificate
           echo "$DISTRIBUTION_CERTIFICATE_P12" | base64 -d > /tmp/dist.p12
           security create-keychain -p "" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "" build.keychain
-          security import /tmp/dist.p12 -k build.keychain -P "$DISTRIBUTION_CERTIFICATE_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/xcodebuild
+          security import /tmp/dist.p12 -k build.keychain \
+            -P "$DISTRIBUTION_CERTIFICATE_P12_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/xcodebuild
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
           rm -f /tmp/dist.p12
-          echo "✅ Signing credentials installed"
 
-      - name: Install provisioning profiles
-        env:
-          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-        run: |
-          # Download profiles from ASC and install them
+          # Install provisioning profiles
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          for profile_id in U322D896CS 439ZSJV664 W7R54CM73X; do
-            xcrun notarytool store-credentials 2>/dev/null || true
-            curl -s \
-              -H "Authorization: Bearer $(python3 -c "
-import jwt, time
-key_id = '$APP_STORE_CONNECT_KEY_IDENTIFIER'
-issuer_id = '$APP_STORE_CONNECT_ISSUER_ID'
-with open(\"$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8\") as f:
-    private_key = f.read()
-payload = {'iss': issuer_id, 'exp': int(time.time()) + 1200, 'aud': 'appstoreconnect-v1'}
-print(jwt.encode(payload, private_key, algorithm='ES256', headers={'kid': key_id}))
-")" \
-              "https://api.appstoreconnect.apple.com/v1/profiles/$profile_id" | \
-              python3 -c "
-import sys, json, base64
-data = json.load(sys.stdin)
-content = data['data']['attributes']['profileContent']
-with open('/tmp/profile_$profile_id.mobileprovision', 'wb') as f:
-    f.write(base64.b64decode(content))
-import subprocess
-uuid_bytes = subprocess.check_output(['security', 'cms', '-D', '-i', '/tmp/profile_$profile_id.mobileprovision'])
-import plistlib
-plist = plistlib.loads(uuid_bytes)
-uuid = plist.get('UUID', '$profile_id')
-import shutil, os
-dest = os.path.expanduser(f'~/Library/MobileDevice/Provisioning Profiles/{uuid}.mobileprovision')
-shutil.copy('/tmp/profile_$profile_id.mobileprovision', dest)
-print(f'Installed {uuid}.mobileprovision')
-"
-          done
-          echo "✅ Provisioning profiles installed"
+          echo "$PROV_PROFILE_MAIN"   | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/tellsla_main.mobileprovision
+          echo "$PROV_PROFILE_WIDGET" | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/tellsla_widget.mobileprovision
+          echo "$PROV_PROFILE_WATCH"  | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/tellsla_watch.mobileprovision
 
-      - name: Build archive (unsigned)
+          echo "Signing credentials installed"
+
+      - name: Build archive
         run: |
           set -e
           DERIVED_DATA="$RUNNER_TEMP/build"
@@ -100,8 +72,8 @@ print(f'Installed {uuid}.mobileprovision')
 
           xcodebuild archive \
             -project Tellsla.xcodeproj \
-            -scheme $SCHEME \
-            -configuration $CONFIGURATION \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
             -archivePath "$ARCHIVE_PATH" \
             -derivedDataPath "$DERIVED_DATA" \
             CODE_SIGNING_ALLOWED=NO \
@@ -110,11 +82,11 @@ print(f'Installed {uuid}.mobileprovision')
             2>&1 | grep -E "(error:|warning:|Build succeeded|Archive succeeded|FAILED)" || true
 
           if [ ! -d "$ARCHIVE_PATH" ]; then
-            echo "❌ Archive not found: $ARCHIVE_PATH"
+            echo "Archive not found: $ARCHIVE_PATH"
             ls -la "$DERIVED_DATA" || true
             exit 1
           fi
-          echo "✅ Archive created"
+          echo "Archive created"
 
       - name: Export IPA
         run: |
@@ -133,12 +105,12 @@ print(f'Installed {uuid}.mobileprovision')
 
           IPA_FILE=$(find "$EXPORT_PATH" -name "*.ipa" -type f | head -1)
           if [ -z "$IPA_FILE" ]; then
-            echo "❌ IPA not found in $EXPORT_PATH"
+            echo "IPA not found in $EXPORT_PATH"
             ls -la "$EXPORT_PATH"
             exit 1
           fi
           echo "IPA_FILE=$IPA_FILE" >> $GITHUB_ENV
-          echo "✅ IPA exported: $(basename $IPA_FILE)"
+          echo "IPA exported: $(basename $IPA_FILE)"
 
       - name: Upload to TestFlight
         env:
@@ -153,4 +125,4 @@ print(f'Installed {uuid}.mobileprovision')
             --apiKey "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
             --verbose
-          echo "✅ Uploaded to TestFlight"
+          echo "Uploaded to TestFlight"
