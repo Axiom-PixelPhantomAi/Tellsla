@@ -55,7 +55,7 @@ jobs:
           
           xcodebuild archive \
             -project Tellsla.xcodeproj \
-            -scheme $SCHEME \
+            -target Tellsla \
             -configuration $CONFIGURATION \
             -archivePath "$ARCHIVE_PATH" \
             -derivedDataPath "$DERIVED_DATA" \
