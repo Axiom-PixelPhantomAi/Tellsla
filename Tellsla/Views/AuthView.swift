@@ -407,7 +407,7 @@ struct TeslaLoginWebView: View {
     }
 }
 
-struct ASWebAuthenticationPresentationContextProviderImplementation: NSObject, ASWebAuthenticationPresentationContextProviding {
+final class ASWebAuthenticationPresentationContextProviderImplementation: NSObject, ASWebAuthenticationPresentationContextProviding {
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         guard let window = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
             return ASPresentationAnchor()

@@ -2,7 +2,7 @@ import SwiftUI
 import MapKit
 
 struct iPadLayout: View {
-    @State private var selectedTab: String = "navigate"
+    @State private var selectedTab: String? = "navigate"
     @State private var showDetailPanel = true
     @Bindable var appState: AppState
     @State private var locationService: LocationService
@@ -54,7 +54,7 @@ struct iPadLayout: View {
         } detail: {
             // Main content
             ZStack {
-                switch selectedTab {
+                switch selectedTab ?? "navigate" {
                 case "navigate":
                     NavigateTabView(viewModel: navViewModel, locationService: locationService, appState: appState)
                 case "energy":
