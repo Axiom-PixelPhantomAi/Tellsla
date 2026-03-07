@@ -50,14 +50,9 @@ jobs:
           DERIVED_DATA="$RUNNER_TEMP/build"
           ARCHIVE_PATH="$DERIVED_DATA/Tellsla.xcarchive"
 
-          # Reset code signing settings to Automatic
-          plutil -replace attributes.CODE_SIGN_STYLE -string Automatic Tellsla.xcodeproj/project.pbxproj
-          plutil -replace attributes.DEVELOPMENT_TEAM -string "$TEAM_ID" Tellsla.xcodeproj/project.pbxproj
-          
-          # Verify changes
-          echo "Current code signing style:"
-          plutil -extract attributes.CODE_SIGN_STYLE raw Tellsla.xcodeproj/project.pbxproj
-          
+          # Use xcodebuild with automatic signing
+          echo "Building with automatic signing..."
+
           xcodebuild archive \
             -project Tellsla.xcodeproj \
             -scheme $SCHEME \
