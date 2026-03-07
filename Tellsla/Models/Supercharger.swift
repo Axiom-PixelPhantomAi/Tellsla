@@ -53,7 +53,7 @@ nonisolated final class Supercharger: NSObject, Codable, Identifiable, MKAnnotat
         self.totalStalls = totalStalls
         self.availableStalls = availableStalls
         self.maxPowerKW = maxPowerKW
-        self.pricePerKwh = pricePerKWh
+        self.pricePerKWh = pricePerKWh
         self.amenities = amenities
         self.status = status
         self.distanceMiles = distanceMiles
