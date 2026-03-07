@@ -1,7 +1,8 @@
 import Foundation
 import CoreLocation
+import MapKit
 
-nonisolated final class Supercharger: NSObject, Codable, Identifiable, Hashable, Sendable, MKAnnotation {
+nonisolated final class Supercharger: NSObject, Codable, Identifiable, MKAnnotation {
     let id: String
     var name: String
     var address: String
@@ -37,6 +38,27 @@ nonisolated final class Supercharger: NSObject, Codable, Identifiable, Hashable,
         if availabilityPercent > 0.5 { return "green" }
         if availabilityPercent > 0.2 { return "yellow" }
         return "red"
+    }
+    
+    // Initializer for creating Supercharger instances
+    init(id: String, name: String, address: String, latitude: Double, longitude: Double, 
+         totalStalls: Int, availableStalls: Int, maxPowerKW: Int, pricePerKWh: Double?,
+         amenities: [ChargerAmenity], status: ChargerStatus, distanceMiles: Double?, 
+         estimatedWaitMinutes: Int?) {
+        self.id = id
+        self.name = name
+        self.address = address
+        self.latitude = latitude
+        self.longitude = longitude
+        self.totalStalls = totalStalls
+        self.availableStalls = availableStalls
+        self.maxPowerKW = maxPowerKW
+        self.pricePerKwh = pricePerKWh
+        self.amenities = amenities
+        self.status = status
+        self.distanceMiles = distanceMiles
+        self.estimatedWaitMinutes = estimatedWaitMinutes
+        super.init()
     }
 }
 
