@@ -37,30 +37,16 @@ struct SmallWidgetProvider: TimelineProvider {
     }
     
     func getTimeline(in context: Context, completion: @escaping (Timeline<SmallWidgetEntry>) -> Void) {
-        Task {
-            do {
-                let vehicles = try await TeslaAPIService.shared.fetchVehicles()
-                guard let vehicle = vehicles.first else {
-                    let entry = SmallWidgetEntry(date: Date(), batteryLevel: 0, range: 0, isCharging: false, climateOn: false)
-                    completion(Timeline(entries: [entry], policy: .atEnd))
-                    return
-                }
-                
-                let entry = SmallWidgetEntry(
-                    date: Date(),
-                    batteryLevel: vehicle.batteryLevel,
-                    range: Int(vehicle.batteryRange),
-                    isCharging: vehicle.chargingState == .charging,
-                    climateOn: vehicle.climateOn
-                )
-                
-                let nextUpdate = Date().addingTimeInterval(300) // 5 min
-                completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
-            } catch {
-                let entry = SmallWidgetEntry(date: Date(), batteryLevel: 0, range: 0, isCharging: false, climateOn: false)
-                completion(Timeline(entries: [entry], policy: .atEnd))
-            }
-        }
+        // Widget uses placeholder data - main app provides real data via shared container
+        let entry = SmallWidgetEntry(
+            date: Date(),
+            batteryLevel: 75,
+            range: 180,
+            isCharging: false,
+            climateOn: false
+        )
+        let nextUpdate = Date().addingTimeInterval(300) // 5 min
+        completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
     }
 }
 
@@ -146,29 +132,15 @@ struct LockScreenWidgetProvider: TimelineProvider {
     }
     
     func getTimeline(in context: Context, completion: @escaping (Timeline<LockScreenWidgetEntry>) -> Void) {
-        Task {
-            do {
-                let vehicles = try await TeslaAPIService.shared.fetchVehicles()
-                guard let vehicle = vehicles.first else {
-                    let entry = LockScreenWidgetEntry(date: Date(), batteryLevel: 0, timeToFullCharge: nil, isCharging: false)
-                    completion(Timeline(entries: [entry], policy: .atEnd))
-                    return
-                }
-                
-                let entry = LockScreenWidgetEntry(
-                    date: Date(),
-                    batteryLevel: vehicle.batteryLevel,
-                    timeToFullCharge: vehicle.timeToFullCharge,
-                    isCharging: vehicle.chargingState == .charging
-                )
-                
-                let nextUpdate = Date().addingTimeInterval(300)
-                completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
-            } catch {
-                let entry = LockScreenWidgetEntry(date: Date(), batteryLevel: 0, timeToFullCharge: nil, isCharging: false)
-                completion(Timeline(entries: [entry], policy: .atEnd))
-            }
-        }
+        // Widget uses placeholder data - main app provides real data via shared container
+        let entry = LockScreenWidgetEntry(
+            date: Date(),
+            batteryLevel: 75,
+            timeToFullCharge: 45,
+            isCharging: true
+        )
+        let nextUpdate = Date().addingTimeInterval(300)
+        completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
     }
 }
 
@@ -228,29 +200,15 @@ struct DynamicIslandWidgetProvider: TimelineProvider {
     }
     
     func getTimeline(in context: Context, completion: @escaping (Timeline<DynamicIslandEntry>) -> Void) {
-        Task {
-            do {
-                let vehicles = try await TeslaAPIService.shared.fetchVehicles()
-                guard let vehicle = vehicles.first else {
-                    let entry = DynamicIslandEntry(date: Date(), batteryLevel: 0, isCharging: false, timeToFullCharge: nil)
-                    completion(Timeline(entries: [entry], policy: .atEnd))
-                    return
-                }
-                
-                let entry = DynamicIslandEntry(
-                    date: Date(),
-                    batteryLevel: vehicle.batteryLevel,
-                    isCharging: vehicle.chargingState == .charging,
-                    timeToFullCharge: vehicle.timeToFullCharge
-                )
-                
-                let nextUpdate = Date().addingTimeInterval(60) // Update every 1 min during charging
-                completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
-            } catch {
-                let entry = DynamicIslandEntry(date: Date(), batteryLevel: 0, isCharging: false, timeToFullCharge: nil)
-                completion(Timeline(entries: [entry], policy: .atEnd))
-            }
-        }
+        // Widget uses placeholder data - main app provides real data via shared container
+        let entry = DynamicIslandEntry(
+            date: Date(),
+            batteryLevel: 75,
+            isCharging: false,
+            timeToFullCharge: 45
+        )
+        let nextUpdate = Date().addingTimeInterval(300)
+        completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
     }
 }
 

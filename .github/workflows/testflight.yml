@@ -47,22 +47,26 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           set -e
-          ARCHIVE_PATH="$RUNNER_TEMP/Tellsla.xcarchive"
+          DERIVED_DATA="$RUNNER_TEMP/build"
+          ARCHIVE_PATH="$DERIVED_DATA/Tellsla.xcarchive"
 
           # Build archive without code signing (signing happens in export phase)
           echo "Building archive without code signing..."
           
           xcodebuild archive \
             -project Tellsla.xcodeproj \
-            -target Tellsla \
+            -scheme $SCHEME \
             -configuration $CONFIGURATION \
             -archivePath "$ARCHIVE_PATH" \
+            -derivedDataPath "$DERIVED_DATA" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
+            SUPPORTS_MACCATALYST=NO \
             2>&1 | grep -E "(error:|warning:|Build succeeded|Archive succeeded|FAILED)" || true
 
           if [ ! -d "$ARCHIVE_PATH" ]; then
             echo "❌ Archive not found: $ARCHIVE_PATH"
+            ls -la "$DERIVED_DATA" || true
             exit 1
           fi
           echo "✅ Archive created"
@@ -73,8 +77,9 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           set -e
-          ARCHIVE_PATH="$RUNNER_TEMP/Tellsla.xcarchive"
-          EXPORT_PATH="$RUNNER_TEMP/export"
+          DERIVED_DATA="$RUNNER_TEMP/build"
+          ARCHIVE_PATH="$DERIVED_DATA/Tellsla.xcarchive"
+          EXPORT_PATH="$DERIVED_DATA/export"
           mkdir -p "$EXPORT_PATH"
 
           xcodebuild -exportArchive \
