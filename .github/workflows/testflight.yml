@@ -50,6 +50,8 @@ jobs:
           DERIVED_DATA="$RUNNER_TEMP/build"
           ARCHIVE_PATH="$DERIVED_DATA/Tellsla.xcarchive"
 
+          xcodebuild -project Tellsla.xcodeproj -list 2>&1 || true
+
           xcodebuild archive \
             -project Tellsla.xcodeproj \
             -scheme $SCHEME \
@@ -62,7 +64,7 @@ jobs:
             -authenticationKeyPath "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
             CODE_SIGN_STYLE=Automatic \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            2>&1 | grep -E "(error:|warning:|Build succeeded|Archive succeeded|FAILED)" || true
+            2>&1
 
           if [ ! -d "$ARCHIVE_PATH" ]; then
             echo "❌ Archive not found: $ARCHIVE_PATH"
