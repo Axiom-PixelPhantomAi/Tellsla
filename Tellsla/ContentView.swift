@@ -9,15 +9,10 @@ struct ContentView: View {
                 OnboardingView {
                     appState.completeOnboarding()
                 }
-            } else if !appState.isAuthenticated {
-                AuthView {
-                    appState.isAuthenticated = true
-                }
             } else {
                 MainView(appState: appState)
             }
         }
-        .animation(.smooth, value: appState.isAuthenticated)
         .animation(.smooth, value: appState.hasCompletedOnboarding)
     }
 }
