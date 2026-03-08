@@ -79,6 +79,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             SUPPORTS_MACCATALYST=NO \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             2>&1 | grep -E "(error:|warning:|Build succeeded|Archive succeeded|FAILED)" || true
 
           if [ ! -d "$ARCHIVE_PATH" ]; then
